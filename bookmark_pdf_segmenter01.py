@@ -1,57 +1,69 @@
 import os
+import re
 from PyPDF2 import PdfReader, PdfWriter
+from tkinter import Tk, filedialog
 
-def extract_sections_by_bookmarks(input_pdf, output_dir):
+def sanitize_filename(name):
+    """Remove caracteres inválidos para nomes de ficheiros/pastas em todos os sistemas operativos."""
+    return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
+
+def extract_sections_by_bookmarks(input_pdf, book_title):
     """
-    Extract sections from a PDF based on top-level bookmarks.
+    Extrai secções de um PDF com base nos marcadores de nível superior.
     
     Args:
-        input_pdf (str): Path to the input PDF file
-        output_dir (str): Directory to save the extracted PDF sections
+        input_pdf (str): Caminho para o ficheiro PDF de entrada.
+        book_title (str): Título do livro (usado para nome da pasta de saída).
     """
-    # Create output directory if it doesn't exist
+    clean_title = sanitize_filename(book_title)
+    output_dir = f"capitulos_{clean_title}"
+    
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # Open the PDF
     reader = PdfReader(input_pdf)
-    
-    # Get the outline (bookmarks)
     outlines = reader.outline
-    
-    # Filter to get only top-level bookmarks (chapters/main sections)
     top_level_bookmarks = [outline for outline in outlines if not isinstance(outline, list)]
     
-    # Process each top-level bookmark
     for i, bookmark in enumerate(top_level_bookmarks):
-        # Get the title and target page
         title = bookmark['/Title']
         page_num = reader.get_destination_page_number(bookmark)
-        
-        # Determine end page (next bookmark or end of document)
+
         if i < len(top_level_bookmarks) - 1:
             end_page = reader.get_destination_page_number(top_level_bookmarks[i + 1]) - 1
         else:
             end_page = len(reader.pages) - 1
         
-        # Create a new PDF with the pages from this section
         writer = PdfWriter()
         for j in range(page_num, end_page + 1):
             writer.add_page(reader.pages[j])
         
-        # Clean the title for use as a filename
-        clean_title = ''.join(c if c.isalnum() or c in [' ', '-', '_'] else '_' for c in title)
-        output_file = os.path.join(output_dir, f"{i+1:02d}_{clean_title}.pdf")
+        clean_chapter_title = sanitize_filename(title)
+        output_file = os.path.join(output_dir, f"{i+1:02d}_{clean_chapter_title}.pdf")
         
-        # Save the new PDF
         with open(output_file, 'wb') as out_file:
             writer.write(out_file)
         
-        print(f"Created: {output_file} (Pages {page_num+1} to {end_page+1})")
+        print(f"✅ Criado: {output_file} (Páginas {page_num+1} a {end_page+1})")
 
 if __name__ == "__main__":
-    # Replace with your actual file path
-    input_pdf = "Book Title Here.pdf"
-    output_dir = "extracted_chapters"
+    print("📂 Seleciona o ficheiro PDF que queres segmentar...")
+
+    # Abre janela gráfica para escolher o ficheiro
+    root = Tk()
+    root.withdraw()  # Esconde a janela principal
+    input_pdf = filedialog.askopenfilename(
+        title="Seleciona o PDF do livro",
+        filetypes=[("Ficheiros PDF", "*.pdf")]
+    )
     
-    extract_sections_by_bookmarks(input_pdf, output_dir)
+    if not input_pdf:
+        print("❌ Nenhum ficheiro selecionado. A operação foi cancelada.")
+    else:
+        print(f"📝 Ficheiro selecionado: {input_pdf}")
+        book_title = input("📘 Introduz o título do livro (será usado para nomear a pasta): ").strip()
+        if not book_title:
+            print("❌ Título inválido. A operação foi cancelada.")
+        else:
+            extract_sections_by_bookmarks(input_pdf, book_title)
+            print("\n✅ Segmentação concluída com sucesso.")
